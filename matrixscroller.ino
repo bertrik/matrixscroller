@@ -26,13 +26,10 @@ static uint32_t frame[8];
 // reverses bit order in a byte
 static uint8_t revbits(uint8_t b)
 {
-    uint8_t r = 0;
-    int i;
-    for (i = 0; i < 8; i++) {
-        if ((b >> i) & 1) {
-            r |= 128 >> i;
-        }
-    }
+    uint8_t r;
+    r = (b >> 4) | (b << 4);
+    r = ((r & 0xCC) >> 2) | ((r & 0x33) << 2);
+    r = ((r & 0xAA) >> 1) | ((r & 0x55) << 1);
     return r;
 }
 
