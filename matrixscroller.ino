@@ -8,6 +8,8 @@ static LedControl lc = LedControl(/*data*/ 11, /*clk*/ 13, /*cs*/ 10, /*#devices
 #define GLYPH_WIDTH     6
 #define GLYPH_HEIGHT    8
 
+static uint32_t frame[8];
+
 void setup(void)
 {
   /*
@@ -20,8 +22,6 @@ void setup(void)
   /* and clear the display */
   lc.clearDisplay(0);
 }
-
-static uint32_t frame[8];
 
 // reverses bit order in a byte
 static uint8_t revbits(uint8_t b)
@@ -74,11 +74,51 @@ static void scroll(void)
     }
 }
 
+static void draw_bitmap(const uint8_t *bitmap)
+{
+    int i;
+    for (i = 0; i < 8; i++) {
+        frame[i] = (uint32_t)bitmap[i] << 24;
+    }
+}
+
+static void alarm_cycle(void)
+{
+    static int phase = 0;
+    static const uint8_t radio[8] = {0x3C, 0x5A, 0x99, 0x99, 0xFF, 0xE7, 0x42, 0x3C};
+    static const uint8_t mask[8] =  {0x7C, 0xFE, 0x92, 0xFE, 0x7C, 0x38, 0x7C, 0x7C};
+    static const uint8_t skull[8] = {0x7C, 0xFE, 0xFE, 0x92, 0x92, 0x6C, 0x38, 0x38};
+    
+    phase = (phase + 1) % 64;
+    if (phase < 32) {
+        draw_bitmap(radio);
+    } else {
+        draw_bitmap(mask);
+    }
+    update_display();
+    
+    int level = phase % 32;
+    if (level < 16) {
+        lc.setIntensity(0, level);
+    } else {
+        lc.setIntensity(0, 31 - level);
+    }
+}
+
+
 void loop(void) 
 {
-  static const char text[] = "Spoorlaan 5d   PIZZA   ";
   
   int i;
+  int j;
+  
+#if 1
+    alarm_cycle();
+    delay(40);
+#else
+  static const char text[] = "  56 cpm  ";
+
+  lc.setIntensity(0, 4);
   for (i = 0; text[i] != 0; i++) {
     draw_char(text[i]);
     
@@ -86,7 +126,8 @@ void loop(void)
     for (j = 0; j < GLYPH_WIDTH; j++) {
       scroll();
       update_display();
-      delay(25);
+      delay(40);
     }
   }
+#endif
 }
