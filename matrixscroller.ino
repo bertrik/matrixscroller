@@ -1,9 +1,18 @@
+#include <SPI.h>
+
+#include <RF24.h>
+#include <nRF24L01.h>
+#include <RF24_config.h>
+
 //We always have to include the library
 #include "LedControl.h"
 
 #include "font.h"
 
-static LedControl lc = LedControl(/*data*/ 11, /*clk*/ 13, /*cs*/ 10, /*#devices*/ 1);
+static LedControl lc = LedControl(/*data*/ 2, /*clk*/ 4, /*cs*/ 3, /*#devices*/ 2);
+static long int address = 0x66996699L;  // So that's 0x0066996699
+
+static RF24 rf(/*ce*/ 9, /*cs*/ 10);
 
 #define GLYPH_WIDTH     6
 #define GLYPH_HEIGHT    8
@@ -17,10 +26,21 @@ void setup(void)
    we have to do a wakeup call
    */
   lc.shutdown(0,false);
+  lc.shutdown(1,false);
   /* Set the brightness to a medium values */
-  lc.setIntensity(0,1);
+  lc.setIntensity(0,15);
+  lc.setIntensity(1,15);
   /* and clear the display */
   lc.clearDisplay(0);
+  lc.clearDisplay(1);
+  
+  /* NRF init */
+    Serial.begin(115200);
+    rf.begin();
+    rf.setRetries(15, 15);
+    rf.enableDynamicPayloads();
+    rf.openReadingPipe(0, address);
+    rf.startListening();  
 }
 
 // reverses bit order in a byte
@@ -60,8 +80,26 @@ static void draw_char(char c)
 static void update_display(void)
 {
   int i;
+  
+  uint8_t buf[2][8];
+  int x,y,d;
+  memset(buf, 0, sizeof(buf));
+  for (y = 0; y < 8; y++) {
+    for (d = 0; d < 2; d++) {
+      for (x = 0; x < 8; x++) {
+        int shift = 8 + (d * 8) + x;
+        boolean bit = (frame[y] & (1L << shift)) != 0;
+        if (bit) {
+          buf[1 - d][7 - x] |= 1L << y;
+        }
+      }
+    }
+  }
+  
+  // send to display
   for (i = 0; i < 8; i++) {
-    lc.setRow(0, i, frame[i] >> 24);
+    lc.setRow(0, i, buf[0][i]);
+    lc.setRow(1, i, buf[1][i]);
   }
 }
 
@@ -87,7 +125,6 @@ static void alarm_cycle(void)
     static int phase = 0;
     static const uint8_t radio[8] = {0x3C, 0x5A, 0x99, 0x99, 0xFF, 0xE7, 0x42, 0x3C};
     static const uint8_t mask[8] =  {0x7C, 0xFE, 0x92, 0xFE, 0x7C, 0x38, 0x7C, 0x7C};
-    static const uint8_t skull[8] = {0x7C, 0xFE, 0xFE, 0x92, 0x92, 0x6C, 0x38, 0x38};
     
     phase = (phase + 1) % 64;
     if (phase < 32) {
@@ -108,26 +145,41 @@ static void alarm_cycle(void)
 
 void loop(void) 
 {
+  static char text[32] = "Spoorlaan 5d   PIZZA   ";
+  static char buf[32];
+  static boolean avail = false;
   
-  int i;
-  int j;
-  
-#if 1
-    alarm_cycle();
-    delay(40);
-#else
-  static const char text[] = "  56 cpm  ";
+  // prepare text
+  if (avail) {
+    avail = false;
+    memset(buf, 0, sizeof(buf));
+    if (rf.read(&buf, sizeof(buf))) {
+      uint8_t len = buf[0];
+	    if (len > 31) {
+	      len = 31;
+	    }
+      strncpy(text, buf + 1, len);
+      text[len] = '\0';
+      Serial.println(text);
+    }
+  }
 
-  lc.setIntensity(0, 4);
+  // display text
+  int i;
   for (i = 0; text[i] != 0; i++) {
     draw_char(text[i]);
     
     int j;
     for (j = 0; j < GLYPH_WIDTH; j++) {
+      if (rf.available()) {
+        // stop drawing current text, and prepare to receive a new one
+        avail = true;
+        return;
+      }
+      
       scroll();
       update_display();
-      delay(40);
+      delay(25);
     }
   }
-#endif
 }
