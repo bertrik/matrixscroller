@@ -6,7 +6,7 @@ all: font
 CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?,.-:\(\)"
 
 font:
-	convert -font MSXW32J.TTF -size 8x -pointsize 8 caption:$(CHARS) font.png
+	convert -font MSXW40J.TTF -size 8x -pointsize 8 caption:$(CHARS) font.png
 	convert font.png MONO:font.bin
 	echo "const char chars[] = \"$(CHARS)\";" >$(FONT_H)
 	echo "PROGMEM const" >>$(FONT_H)
