@@ -1,11 +1,8 @@
-#include <RF24.h>
-#include <nRF24L01.h>
-#include <RF24_config.h>
-
-#include <SPI.h>
-
 #include <stdint.h>
 #include <stdbool.h>
+
+#include <SPI.h>
+#include <RF24.h>
 
 #define MAX_TEXTSIZE    27
 
@@ -14,23 +11,22 @@
 #define LF      0x0A
 #define CR      0x0D
 
-static long int address = 0x66996699L;  // So that's 0x0066996699
+static uint64_t address = 0x66996699L;  // So that's 0x0066996699
 
-static uint8_t buffer[5];
 static RF24 rf(/*ce*/ 9, /*cs*/ 10);
 
 void setup(void)
 {
     // initialize serial port
-    Serial.begin(115200);
+    Serial.begin(9600);
     Serial.println("Hello world!\n");
-    
+
     // init RF24
     rf.begin();
-    rf.setRetries(15, 15);
-    rf.enableDynamicPayloads();
     rf.openWritingPipe(address);
+    rf.enableDynamicPayloads();
 }
+
 
 /* Processes a character into an edit buffer, returns true 
  * @param c the character to process
@@ -41,57 +37,69 @@ void setup(void)
 static bool process_char(char c, char *buf, int size)
 {
     static int index = 0;
+
     switch (c) {
-    case CR:
+
+    case LF:
         // ignore
         break;
-    case LF:
+
+    case CR:
         // finish
         buf[index] = 0;
-        Serial.print(c);
+        Serial.write(c);
         index = 0;
         return true;
+
     case BS:
+    case 127:
         // backspace
         if (index > 0) {
-            Serial.print(BS);
-            Serial.print(' ');
-            Serial.print(BS);
+            Serial.write(BS);
+            Serial.write(' ');
+            Serial.write(BS);
             index--;
         } else {
-            Serial.print(BELL);
+            Serial.write(BELL);
         }
         break;
+
     default:
         // try to add character to buffer
         if (index < (size - 1)) {
             buf[index++] = c;
-            Serial.print(c);
+            Serial.write(c);
         } else {
-            Serial.print(BELL);
+            Serial.write(BELL);
         }
         break;
     }
     return false;
 }
 
-
+/* Sends a text over NRF24
+ * @param text the text to send (0-terminated), should be at most 27 characters long
+ */
 static void send_text(char *text)
 {
-    char buffer[32];
+    char sndbuf[32];
+
+    Serial.print("Sending: '");
+    Serial.print(text);
+    Serial.println("'");
     
     // construct buffer
     int length = strlen(text);
     int idx = 0;
-    buffer[idx++] = 4 + length;
-    buffer[idx++] = 'D';
-    buffer[idx++] = 'O';
-    buffer[idx++] = 'O';
-    buffer[idx++] = 'R';
-    memcpy(buffer + idx, text, length);
-    
+    sndbuf[idx++] = 4 + length;
+    sndbuf[idx++] = 'D';
+    sndbuf[idx++] = 'O';
+    sndbuf[idx++] = 'O';
+    sndbuf[idx++] = 'R';
+    memcpy(sndbuf + idx, text, length);
+
     // send it
-    rf.write(buffer, idx + length);
+    rf.write(sndbuf, idx + length);
 }
 
 void loop(void)
