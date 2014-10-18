@@ -1,8 +1,7 @@
-#include <SPI.h>
+#include <stdint.h>
 
+#include <SPI.h>
 #include <RF24.h>
-#include <nRF24L01.h>
-#include <RF24_config.h>
 
 //We always have to include the library
 #include "LedControl.h"
@@ -10,7 +9,7 @@
 #include "font.h"
 
 static LedControl lc = LedControl(/*data*/ 2, /*clk*/ 4, /*cs*/ 3, /*#devices*/ 2);
-static long int address = 0x66996699L;  // So that's 0x0066996699
+static uint64_t address = 0x66996699LL;  // So that's 0x0066996699
 
 static RF24 rf(/*ce*/ 9, /*cs*/ 10);
 
@@ -34,13 +33,17 @@ void setup(void)
   lc.clearDisplay(0);
   lc.clearDisplay(1);
   
-  /* NRF init */
-    Serial.begin(115200);
+    Serial.begin(9600);
+    Serial.println("Hello world!");
+    
+    /* NRF init */
     rf.begin();
-    rf.setRetries(15, 15);
+    Serial.print("Is plus? ");
+    Serial.println(rf.isPVariant() ? "yes" : "no");    
+
     rf.enableDynamicPayloads();
-    rf.openReadingPipe(0, address);
-    rf.startListening();  
+    rf.openReadingPipe(1, address);
+    rf.startListening();
 }
 
 // reverses bit order in a byte
@@ -145,24 +148,29 @@ static void alarm_cycle(void)
 
 void loop(void) 
 {
-  static char text[32] = "Spoorlaan 5d   PIZZA   ";
-  static char buf[32];
+  static char text[32] = " PIZZA ";
   static boolean avail = false;
   
   // prepare text
-  if (avail) {
-    avail = false;
-    memset(buf, 0, sizeof(buf));
-    if (rf.read(&buf, sizeof(buf))) {
-      uint8_t len = buf[0];
-	    if (len > 31) {
-	      len = 31;
-	    }
-      strncpy(text, buf + 1, len);
-      text[len] = '\0';
-      Serial.println(text);
+    while (rf.available()) {
+        char buf[32];
+        memset(buf, 0, sizeof(buf));
+        rf.read(&buf, sizeof(buf));
+        if (memcmp(buf + 1, "DOOR", 4) == 0) {
+            uint8_t len = buf[0];
+            if (len < 4) {
+                len = 4;
+            }
+            if (len > 31) {
+                len = 31;
+            }
+            strncpy(text, buf + 5, len - 4);
+            text[len - 4] = '\0';
+            Serial.print("Received: '");
+            Serial.print(text);
+            Serial.println("'");
+        }
     }
-  }
 
   // display text
   int i;
@@ -171,12 +179,6 @@ void loop(void)
     
     int j;
     for (j = 0; j < GLYPH_WIDTH; j++) {
-      if (rf.available()) {
-        // stop drawing current text, and prepare to receive a new one
-        avail = true;
-        return;
-      }
-      
       scroll();
       update_display();
       delay(25);
