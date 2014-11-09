@@ -152,23 +152,23 @@ void loop(void)
   static boolean avail = false;
   
   // prepare text
-    while (rf.available()) {
+    if (rf.available()) {
         char buf[32];
-        memset(buf, 0, sizeof(buf));
-        rf.read(&buf, sizeof(buf));
-        if (memcmp(buf + 1, "DOOR", 4) == 0) {
-            uint8_t len = buf[0];
-            if (len < 4) {
-                len = 4;
+        boolean done = false;
+        while (!done) {
+            memset(buf, 0, sizeof(buf));
+            done = rf.read(&buf, sizeof(buf));
+            if (memcmp(buf + 1, "DOOR", 4) == 0) {
+                uint8_t len = buf[0];
+                if ((len < 4) || (len > 31)) {
+                    continue;
+                }
+                strncpy(text, buf + 5, len - 4);
+                text[len - 4] = '\0';
+                Serial.print("Received: '");
+                Serial.print(text);
+                Serial.println("'");
             }
-            if (len > 31) {
-                len = 31;
-            }
-            strncpy(text, buf + 5, len - 4);
-            text[len - 4] = '\0';
-            Serial.print("Received: '");
-            Serial.print(text);
-            Serial.println("'");
         }
     }
 
